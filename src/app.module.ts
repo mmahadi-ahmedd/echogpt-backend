@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { UsersModule } from './users/users.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { ProvidersModule } from './providers/providers.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     AuthModule,
     UsersModule,
     SubscriptionsModule,
+    ProvidersModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
