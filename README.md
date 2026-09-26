@@ -1,114 +1,97 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# EchoGPT Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Production-ready REST API for the **EchoGPT Chrome Extension** — a multi-AI chat assistant. Built with NestJS, PostgreSQL, Prisma, and documented with Swagger/OpenAPI.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Tech Stack
 
-## Description
+- **Framework:** NestJS
+- **Database:** PostgreSQL (hosted on Neon)
+- **ORM:** Prisma
+- **Auth:** JWT (access + refresh tokens, rotated on use)
+- **Docs:** Swagger / OpenAPI
+- **AI Providers:** OpenAI, Anthropic (Claude), Google Gemini — via a shared adapter interface
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Architecture
 
-## Project setup
+See [`SYSTEM_DESIGN.md`](./SYSTEM_DESIGN.md) for the full architecture, ER diagram, and design rationale.
 
-```bash
-$ npm install
-```
+**Key design decisions:**
+- **Adapter/Strategy pattern for AI providers** — one shared interface (`AIProviderAdapter`), one class per provider. Adding a new provider means writing one class; nothing else in the codebase changes.
+- **Refresh tokens are random bytes, hashed with SHA-256 before storage** — not JWTs. A stolen database dump gives an attacker nothing usable, and revoking a session is a single `DELETE`.
+- **Provider API keys are encrypted at rest with AES-256-GCM**, decrypted only in memory when a request is made, and never returned in any API response (masked as `sk-••••••••XXXX`).
+- **Every route is protected by default** (global `JwtAuthGuard` + `RolesGuard`), opted out per-route with `@Public()` — a stronger default than protecting routes one at a time.
+- **One `ApiUsageLog` table powers both the daily rate limiter and the admin analytics dashboard**, so the two can never drift out of sync.
 
-## Compile and run the project
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- A PostgreSQL database (local or hosted, e.g. Neon, Supabase, Railway)
+
+### Setup
 
 ```bash
-# development
-$ npm run start
+git clone https://github.com/mmahadi-ahmedd/echogpt-backend
+cd echogpt-backend
+npm install
+cp .env.example .env
+# Fill in .env with your DATABASE_URL and generated secrets (see .env.example for the generator command)
 
-# watch mode
-$ npm run start:dev
+npx prisma migrate dev
+npx prisma db seed
 
-# production mode
-$ npm run start:prod
+npm run start:dev
 ```
 
-## Run tests
+Server runs at `http://localhost:3000`
+Swagger docs at `http://localhost:3000/api/docs`
 
-```bash
-# unit tests
-$ npm run test
+### Test accounts
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+**Admin:**
+```
+Email: admin@echogpt.com
+Password: Admin@12345
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+**Regular user:**
+```
+Email: user2@example.com
+Password: User@123
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Change these credentials immediately in any real deployment.
 
-## Observability
+## API Overview
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+| Module | Base path | Description |
+|---|---|---|
+| Auth | `/auth` | Register, login, refresh, logout, email verification |
+| Users | `/users` | Profile, update, change password, delete account |
+| Subscriptions | `/subscription` | Plan info, upgrade/downgrade, usage tracking |
+| AI Providers | `/providers` | Admin-only CRUD, health checks, encrypted key storage |
+| Chat | `/chat` | Send prompt, streaming, conversation history |
+| Search | `/search` | AI-assisted search, history, recent, suggestions, caching |
+| Admin | `/admin` | Dashboard stats, user/subscription management, analytics, logs, system health |
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+Full request/response schemas for every endpoint are in Swagger at `/api/docs`.
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+## Known Trade-offs / Not Fully Implemented
 
-## Resources
+Documented honestly rather than silently left out:
 
-Check out a few resources that may come in handy when working with NestJS:
+- **Email verification** returns the token directly in the API response instead of sending a real email — no SMTP/mail provider was wired up, out of scope for this deadline. In production this would go through SendGrid, SES, or similar.
+- **Streaming chat responses** (`POST /chat/stream`) is natively implemented for OpenAI. Claude and Gemini adapters fall back to returning the full response as a single chunk, since their native streaming SDKs weren't wired up under today's timeline.
+- **Search result caching** uses a simple in-memory `Map` with a 10-minute TTL — per-process, not shared across multiple server instances. A production deployment would use Redis instead.
+- **Docker** was intentionally skipped for this submission; the app runs directly via `npm run start:dev` against a cloud-hosted Postgres instance (Neon).
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Database
 
-## Support
+Schema: [`prisma/schema.prisma`](./prisma/schema.prisma)
+Migrations: [`prisma/migrations/`](./prisma/migrations/)
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+9 core tables: `roles`, `users`, `sessions`, `subscriptions`, `ai_providers`, `conversations`, `messages`, `web_searches`, `api_usage_logs`.
 
-## Stay in touch
+## Testing
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+A Postman collection is included at [`postman/EchoGPT.postman_collection.json`](./postman/EchoGPT.postman_collection.json), or use the live Swagger UI at `/api/docs` to try every endpoint interactively.
