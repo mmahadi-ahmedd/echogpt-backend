@@ -1,5 +1,7 @@
 # EchoGPT Backend — System Design
 
+📊 **Interactive diagrams:** [View on Lucidchart](https://lucid.app/lucidchart/bbeb9a44-fec8-4c5f-b87d-4baa93cbd4b5/edit?viewport_loc=-3864%2C-640%2C6460%2C3320%2C0_0&invitationId=inv_7a91f138-df99-489d-b247-5557dd23d778)
+
 ## 1. High-Level Architecture
 
 ```mermaid
