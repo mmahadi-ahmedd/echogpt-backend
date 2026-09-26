@@ -16,4 +16,5 @@ export interface HealthStatus {
 export interface AIProviderAdapter {
   sendMessage(messages: ChatMessage[], apiKey: string, model: string): Promise<AIResponse>;
   healthCheck(apiKey: string, model: string): Promise<HealthStatus>;
+  streamMessage?(messages: ChatMessage[], apiKey: string, model: string): AsyncGenerator<string>;
 }

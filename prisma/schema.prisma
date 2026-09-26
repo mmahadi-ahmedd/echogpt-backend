@@ -39,14 +39,16 @@ model Role {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  roleId       String
-  role         Role     @relation(fields: [roleId], references: [id])
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String   @id @default(uuid())
+  email             String   @unique
+  passwordHash      String
+  roleId            String
+  role              Role     @relation(fields: [roleId], references: [id])
+  isActive          Boolean  @default(true)
+  isEmailVerified   Boolean  @default(false)
+  verificationToken String?  @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   sessions      Session[]
   subscription  Subscription?

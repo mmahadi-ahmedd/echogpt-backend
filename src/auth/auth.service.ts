@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoleName, PlanType } from '@prisma/client';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
@@ -16,7 +17,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
-  ) {}
+  ) { }
 
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
@@ -45,35 +46,73 @@ export class AuthService {
   }
 
   async register(email: string, password: string) {
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) throw new ConflictException('Email already registered');
+  const existing = await this.prisma.user.findUnique({ where: { email } });
+  if (existing) throw new ConflictException('Email already registered');
 
-    const userRole = await this.prisma.role.findUnique({
-      where: { name: RoleName.USER },
-    });
-    if (!userRole) throw new Error('USER role not seeded — run prisma db seed');
+  const userRole = await this.prisma.role.findUnique({
+    where: { name: RoleName.USER },
+  });
+  if (!userRole) throw new Error('USER role not seeded — run prisma db seed');
 
-    const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await bcrypt.hash(password, 10);
+  const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        roleId: userRole.id,
-        subscription: { create: { plan: PlanType.FREE, dailyLimit: 20 } },
-      },
-    });
+  const user = await this.prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      roleId: userRole.id,
+      verificationToken,
+      subscription: { create: { plan: PlanType.FREE, dailyLimit: 20 } },
+    },
+  });
 
-    const tokens = await this.issueTokens(user.id, user.email);
-    return { user: { id: user.id, email: user.email }, ...tokens };
-  }
+  // In production this would be emailed. For this assignment, returned directly
+  // so it can be tested without a real mail provider — documented in README.
+  const tokens = await this.issueTokens(user.id, user.email);
+  return {
+    user: { id: user.id, email: user.email },
+    verificationToken,
+    ...tokens,
+  };
+}
+
+async verifyEmail(token: string) {
+  const user = await this.prisma.user.findUnique({ where: { verificationToken: token } });
+  if (!user) throw new BadRequestException('Invalid or expired verification token');
+
+  await this.prisma.user.update({
+    where: { id: user.id },
+    data: { isEmailVerified: true, verificationToken: null },
+  });
+
+  return { message: 'Email verified successfully' };
+}
+
+async resendVerification(email: string) {
+  const user = await this.prisma.user.findUnique({ where: { email } });
+  if (!user) throw new NotFoundException('User not found');
+  if (user.isEmailVerified) return { message: 'Email is already verified' };
+
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  await this.prisma.user.update({
+    where: { id: user.id },
+    data: { verificationToken },
+  });
+
+  return { message: 'Verification token regenerated', verificationToken };
+}
 
   async login(email: string, password: string, userAgent?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: { role: true },
     });
-    if (!user || !user.isActive) throw new UnauthorizedException('Invalid credentials');
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('This account has been suspended. Contact support.');
+    }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');

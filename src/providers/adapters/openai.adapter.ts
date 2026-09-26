@@ -30,4 +30,18 @@ export class OpenAIAdapter implements AIProviderAdapter {
       return { healthy: false, message: err.message ?? 'Health check failed' };
     }
   }
+
+  async *streamMessage(messages: ChatMessage[], apiKey: string, model: string): AsyncGenerator<string> {
+    const client = new OpenAI({ apiKey });
+    const stream = await client.chat.completions.create({
+      model,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content;
+      if (token) yield token;
+    }
+  }
 }

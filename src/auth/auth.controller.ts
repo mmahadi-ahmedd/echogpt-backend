@@ -5,11 +5,13 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from '../common/decorators/public.decorator';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @Public()
   @Post('register')
@@ -18,6 +20,20 @@ export class AuthController {
   @ApiResponse({ status: 409, description: 'Email already registered' })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto.email, dto.password);
+  }
+
+  @Public()
+  @Post('verify-email')
+  @ApiOperation({ summary: 'Verify email using the token issued at registration' })
+  verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto.token);
+  }
+
+  @Public()
+  @Post('resend-verification')
+  @ApiOperation({ summary: 'Regenerate a verification token' })
+  resendVerification(@Body() dto: ResendVerificationDto) {
+    return this.authService.resendVerification(dto.email);
   }
 
   @Public()

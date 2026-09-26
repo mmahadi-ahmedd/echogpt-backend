@@ -16,7 +16,7 @@ export class ChatService {
     private providersService: ProvidersService,
     private registry: ProviderRegistryService,
     private subscriptionsService: SubscriptionsService,
-  ) {}
+  ) { }
 
   async sendMessage(userId: string, prompt: string, providerName?: string, conversationId?: string) {
     // 1. Enforce usage limit
@@ -125,5 +125,45 @@ export class ChatService {
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
     return conversation;
+  }
+
+  async *streamMessage(userId: string, prompt: string, providerName?: string) {
+    const usage = await this.subscriptionsService.getUsage(userId);
+    if (usage.remaining <= 0) {
+      throw new ForbiddenException('Daily request limit reached.');
+    }
+
+    const providerRecord = await this.providersService.getDecryptedDefaultOrNamed(providerName);
+    const adapter = this.registry.resolve(providerRecord.name);
+
+    if (!adapter.streamMessage) {
+      // Fallback: no native streaming support, send the full reply as one chunk
+      const result = await adapter.sendMessage(
+        [{ role: 'user', content: prompt }],
+        providerRecord.apiKey,
+        providerRecord.model,
+      );
+      yield result.content;
+      await this.logUsage(userId, providerRecord.id);
+      return;
+    }
+
+    let fullContent = '';
+    for await (const token of adapter.streamMessage(
+      [{ role: 'user', content: prompt }],
+      providerRecord.apiKey,
+      providerRecord.model,
+    )) {
+      fullContent += token;
+      yield token;
+    }
+
+    await this.logUsage(userId, providerRecord.id);
+  }
+
+  private async logUsage(userId: string, providerId?: string) {
+    await this.prisma.apiUsageLog.create({
+      data: { userId, providerId, endpoint: '/chat/stream', statusCode: 200 },
+    });
   }
 }
